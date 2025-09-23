@@ -12,5 +12,9 @@ cmds = ['npm ci']
 [phases.build]
 cmds = ['npm run build']
 
+[phases.production-build]
+dependsOn = ['build']
+cmds = ['npx esbuild server/production.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/server.js']
+
 [start]
-cmd = 'npm start'
+cmd = 'node dist/server.js'
