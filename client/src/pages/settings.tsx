@@ -17,6 +17,7 @@ import {
 
 export default function Settings() {
   const [apiKey, setApiKey] = useState("")
+  const [selectedModel, setSelectedModel] = useState("anthropic/claude-3.5-sonnet")
   const [defaultGenre, setDefaultGenre] = useState("Business")
   const [defaultWordCount, setDefaultWordCount] = useState("50000")
   const [notifications, setNotifications] = useState(true)
@@ -25,6 +26,7 @@ export default function Settings() {
   const handleSaveSettings = () => {
     console.log("Saving settings:", { 
       apiKey: apiKey ? "****" : "", 
+      selectedModel,
       defaultGenre, 
       defaultWordCount, 
       notifications, 
@@ -35,6 +37,44 @@ export default function Settings() {
   const handleTestConnection = () => {
     console.log("Testing OpenRouter connection")
   }
+
+  const openRouterModels = [
+    {
+      id: "anthropic/claude-3.5-sonnet",
+      name: "Claude 3.5 Sonnet",
+      description: "Most capable model for complex writing tasks"
+    },
+    {
+      id: "anthropic/claude-3-haiku",
+      name: "Claude 3 Haiku", 
+      description: "Fast and efficient for simpler tasks"
+    },
+    {
+      id: "openai/gpt-4o",
+      name: "GPT-4o",
+      description: "OpenAI's most advanced multimodal model"
+    },
+    {
+      id: "openai/gpt-4o-mini",
+      name: "GPT-4o Mini",
+      description: "Affordable and intelligent small model"
+    },
+    {
+      id: "meta-llama/llama-3.1-70b-instruct",
+      name: "Llama 3.1 70B",
+      description: "Meta's powerful open-source model"
+    },
+    {
+      id: "google/gemini-pro-1.5",
+      name: "Gemini 1.5 Pro",
+      description: "Google's advanced model with large context"
+    },
+    {
+      id: "mistralai/mixtral-8x7b-instruct",
+      name: "Mixtral 8x7B",
+      description: "High-quality mixture of experts model"
+    }
+  ]
 
   const genres = [
     "Business", "Self-Help", "Health & Wellness", "Technology", 
@@ -83,6 +123,46 @@ export default function Settings() {
               {apiKey ? "Configured" : "Not configured"}
             </Badge>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>AI Model Selection</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="model-select">Choose AI Model</Label>
+            <Select value={selectedModel} onValueChange={setSelectedModel}>
+              <SelectTrigger data-testid="select-ai-model">
+                <SelectValue placeholder="Select an AI model" />
+              </SelectTrigger>
+              <SelectContent>
+                {openRouterModels.map((model) => (
+                  <SelectItem key={model.id} value={model.id}>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{model.name}</span>
+                      <span className="text-sm text-muted-foreground">{model.description}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-sm text-muted-foreground">
+              Different models have varying capabilities and costs. Choose based on your quality and budget requirements.
+            </p>
+          </div>
+          {selectedModel && (
+            <div className="p-3 bg-muted rounded-md">
+              <p className="text-sm font-medium mb-1">Selected Model:</p>
+              <p className="text-sm">
+                {openRouterModels.find(model => model.id === selectedModel)?.name}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {openRouterModels.find(model => model.id === selectedModel)?.description}
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
