@@ -6,7 +6,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
-import { Sparkles, RefreshCw, Target, Users, TrendingUp, BookOpen } from "lucide-react"
+import { Sparkles, RefreshCw, Target, Users, TrendingUp, BookOpen, AlertCircle } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useToast } from "@/hooks/use-toast"
+import { useMutation, useQuery } from "@tanstack/react-query"
+import { Link } from "wouter"
 import {
   Select,
   SelectContent,
@@ -16,64 +20,120 @@ import {
 } from "@/components/ui/select"
 
 interface BookIdea {
+  id: string
   title: string
-  subtitle: string
   description: string
   targetAudience: string
-  marketPotential: string
-  keyTopics: string[]
-  estimatedLength: number
-  difficulty: "Beginner" | "Intermediate" | "Advanced"
   genre: string
+  keyPoints: string[]
+  userId: string
+  isSelected: boolean
+  createdAt: Date
 }
 
 interface BookIdeaGeneratorProps {
-  onIdeaGenerated?: (idea: BookIdea) => void
+  onIdeaGenerated?: (ideas: BookIdea[]) => void
   onIdeaAccepted?: (idea: BookIdea) => void
 }
 
 export function BookIdeaGenerator({ onIdeaGenerated, onIdeaAccepted }: BookIdeaGeneratorProps) {
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [generatedIdea, setGeneratedIdea] = useState<BookIdea | null>(null)
+  const { toast } = useToast()
+  const [generatedIdeas, setGeneratedIdeas] = useState<BookIdea[]>([])
+  const [selectedIdea, setSelectedIdea] = useState<BookIdea | null>(null)
   const [selectedGenre, setSelectedGenre] = useState("")
   const [keywords, setKeywords] = useState("")
   const [targetAudience, setTargetAudience] = useState("")
+  const [numberOfIdeas, setNumberOfIdeas] = useState(3)
+  
+  // Check if user has configured OpenRouter API key
+  const { data: settings } = useQuery({
+    queryKey: ['/api/settings'],
+    queryFn: async () => {
+      const response = await fetch('/api/settings')
+      if (!response.ok) {
+        throw new Error('Failed to fetch settings')
+      }
+      return response.json()
+    }
+  })
+  
+  const hasApiKey = Boolean(settings?.openrouterApiKey)
+  
+  const generateIdeasMutation = useMutation({
+    mutationFn: async (data: {
+      genre: string
+      targetAudience?: string
+      keyInterests?: string[]
+      count?: number
+    }) => {
+      const response = await fetch('/api/generate-ideas', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to generate ideas')
+      }
+      
+      return response.json()
+    },
+    onSuccess: (ideas: BookIdea[]) => {
+      setGeneratedIdeas(ideas)
+      setSelectedIdea(ideas[0] || null)
+      onIdeaGenerated?.(ideas)
+      toast({
+        title: "Ideas generated!",
+        description: `Generated ${ideas.length} book idea${ideas.length === 1 ? '' : 's'} successfully.`
+      })
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error generating ideas",
+        description: error.message,
+        variant: "destructive"
+      })
+    }
+  })
 
-  // Mock generated idea for demo
-  const mockIdea: BookIdea = {
-    title: "The Complete Guide to Digital Marketing",
-    subtitle: "Master SEO, Social Media, and Analytics in 2024",
-    description: "A comprehensive guide that takes readers from digital marketing basics to advanced strategies. Covers modern SEO techniques, social media marketing, content creation, email marketing, and data analytics. Perfect for entrepreneurs, small business owners, and marketing professionals looking to stay ahead in the digital landscape.",
-    targetAudience: "Small business owners, entrepreneurs, and marketing professionals aged 25-45",
-    marketPotential: "High demand market with 500K+ monthly searches for digital marketing guides",
-    keyTopics: ["SEO Optimization", "Social Media Strategy", "Content Marketing", "Email Campaigns", "Analytics & ROI", "Paid Advertising", "Lead Generation", "Brand Building"],
-    estimatedLength: 65000,
-    difficulty: "Intermediate",
-    genre: "Business"
+  const generateIdeas = () => {
+    if (!selectedGenre) {
+      toast({
+        title: "Genre required",
+        description: "Please select a genre before generating ideas.",
+        variant: "destructive"
+      })
+      return
+    }
+    
+    const keyInterests = keywords.trim() ? 
+      keywords.split(',').map(k => k.trim()).filter(k => k.length > 0) : 
+      undefined
+    
+    generateIdeasMutation.mutate({
+      genre: selectedGenre,
+      targetAudience: targetAudience.trim() || undefined,
+      keyInterests,
+      count: numberOfIdeas
+    })
   }
 
-  const generateIdea = async () => {
-    setIsGenerating(true)
-    console.log("Generating book idea with:", { selectedGenre, keywords, targetAudience })
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
-    setGeneratedIdea(mockIdea)
-    setIsGenerating(false)
-    onIdeaGenerated?.(mockIdea)
-  }
-
-  const regenerateIdea = () => {
-    console.log("Regenerating book idea")
-    generateIdea()
+  const regenerateIdeas = () => {
+    generateIdeas()
   }
 
   const acceptIdea = () => {
-    if (generatedIdea) {
-      console.log("Accepting book idea:", generatedIdea.title)
-      onIdeaAccepted?.(generatedIdea)
+    if (selectedIdea) {
+      console.log("Accepting book idea:", selectedIdea.title)
+      onIdeaAccepted?.(selectedIdea)
     }
+  }
+  
+  const selectIdea = (idea: BookIdea) => {
+    setSelectedIdea(idea)
   }
 
   const genres = [
@@ -91,9 +151,9 @@ export function BookIdeaGenerator({ onIdeaGenerated, onIdeaAccepted }: BookIdeaG
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="genre">Genre</Label>
+              <Label htmlFor="genre">Genre *</Label>
               <Select value={selectedGenre} onValueChange={setSelectedGenre}>
                 <SelectTrigger data-testid="select-genre">
                   <SelectValue placeholder="Select genre" />
@@ -118,117 +178,179 @@ export function BookIdeaGenerator({ onIdeaGenerated, onIdeaAccepted }: BookIdeaG
                 data-testid="input-target-audience"
               />
             </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="number-of-ideas">Number of Ideas</Label>
+              <Select value={numberOfIdeas.toString()} onValueChange={(v) => setNumberOfIdeas(parseInt(v))}>
+                <SelectTrigger data-testid="select-number-ideas">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">1 idea</SelectItem>
+                  <SelectItem value="3">3 ideas</SelectItem>
+                  <SelectItem value="5">5 ideas</SelectItem>
+                  <SelectItem value="8">8 ideas</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           
           <div className="space-y-2">
             <Label htmlFor="keywords">Keywords or Topics (optional)</Label>
             <Textarea
               id="keywords"
-              placeholder="e.g., digital marketing, SEO, social media"
+              placeholder="e.g., digital marketing, SEO, social media (separate with commas)"
               value={keywords}
               onChange={(e) => setKeywords(e.target.value)}
               className="min-h-20"
               data-testid="textarea-keywords"
             />
+            <p className="text-xs text-muted-foreground">
+              Separate multiple topics with commas. This helps the AI focus on your areas of interest.
+            </p>
           </div>
           
+          {!hasApiKey && (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                OpenRouter API key not configured. Please{" "}
+                <Link href="/settings" className="underline font-medium">
+                  set it in Settings
+                </Link>{" "}
+                to enable AI book idea generation.
+              </AlertDescription>
+            </Alert>
+          )}
+          
+          {generateIdeasMutation.error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                {(generateIdeasMutation.error as Error).message}
+                {(generateIdeasMutation.error as Error).message.includes('API key') && (
+                  <>
+                    {" "}<Link href="/settings" className="underline font-medium text-destructive-foreground">
+                      Go to Settings
+                    </Link>
+                  </>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+          
           <Button 
-            onClick={generateIdea} 
-            disabled={isGenerating || !selectedGenre}
+            onClick={generateIdeas} 
+            disabled={generateIdeasMutation.isPending || !selectedGenre || !hasApiKey}
             className="w-full"
             data-testid="button-generate-idea"
           >
-            {isGenerating ? (
+            {generateIdeasMutation.isPending ? (
               <>
                 <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                Generating Ideas...
+                Generating {numberOfIdeas} Idea{numberOfIdeas === 1 ? '' : 's'}...
+              </>
+            ) : !hasApiKey ? (
+              <>
+                <AlertCircle className="mr-2 h-4 w-4" />
+                Configure API Key First
               </>
             ) : (
               <>
                 <Sparkles className="mr-2 h-4 w-4" />
-                Generate Book Idea
+                Generate {numberOfIdeas} Book Idea{numberOfIdeas === 1 ? '' : 's'}
               </>
             )}
           </Button>
         </CardContent>
       </Card>
 
-      {generatedIdea && (
+      {generatedIdeas.length > 0 && (
         <Card>
           <CardHeader>
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <CardTitle data-testid="text-generated-title">{generatedIdea.title}</CardTitle>
-                <p className="text-lg text-muted-foreground" data-testid="text-generated-subtitle">
-                  {generatedIdea.subtitle}
-                </p>
-              </div>
-              <Badge variant="secondary">{generatedIdea.genre}</Badge>
-            </div>
+            <CardTitle className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-primary" />
+              Generated Ideas ({generatedIdeas.length})
+            </CardTitle>
+            {generatedIdeas.length > 1 && (
+              <p className="text-sm text-muted-foreground">
+                Click on an idea to view details, or use the tabs below to browse through all generated ideas.
+              </p>
+            )}
           </CardHeader>
           <CardContent className="space-y-6">
-            <div>
-              <h4 className="font-semibold mb-2 flex items-center gap-2">
-                <BookOpen className="h-4 w-4" />
-                Description
-              </h4>
-              <p className="text-muted-foreground" data-testid="text-generated-description">
-                {generatedIdea.description}
-              </p>
-            </div>
-
-            <Separator />
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h4 className="font-semibold mb-2 flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Target Audience
-                </h4>
-                <p className="text-muted-foreground" data-testid="text-generated-audience">
-                  {generatedIdea.targetAudience}
-                </p>
-              </div>
-
-              <div>
-                <h4 className="font-semibold mb-2 flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4" />
-                  Market Potential
-                </h4>
-                <p className="text-muted-foreground" data-testid="text-market-potential">
-                  {generatedIdea.marketPotential}
-                </p>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="font-semibold mb-3 flex items-center gap-2">
-                <Target className="h-4 w-4" />
-                Key Topics
-              </h4>
-              <div className="flex flex-wrap gap-2">
-                {generatedIdea.keyTopics.map((topic, index) => (
-                  <Badge key={index} variant="outline" data-testid={`badge-topic-${index}`}>
-                    {topic}
-                  </Badge>
+            {generatedIdeas.length > 1 && (
+              <div className="flex gap-2 flex-wrap">
+                {generatedIdeas.map((idea, index) => (
+                  <Button
+                    key={idea.id}
+                    variant={selectedIdea?.id === idea.id ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => selectIdea(idea)}
+                    data-testid={`button-select-idea-${index}`}
+                  >
+                    Idea {index + 1}
+                  </Button>
                 ))}
               </div>
-            </div>
+            )}
+            
+            {selectedIdea && (
+              <>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <CardTitle data-testid="text-generated-title">{selectedIdea.title}</CardTitle>
+                  </div>
+                  <Badge variant="secondary">{selectedIdea.genre}</Badge>
+                </div>
+                
+                <div>
+                  <h4 className="font-semibold mb-2 flex items-center gap-2">
+                    <BookOpen className="h-4 w-4" />
+                    Description
+                  </h4>
+                  <p className="text-muted-foreground" data-testid="text-generated-description">
+                    {selectedIdea.description}
+                  </p>
+                </div>
 
-            <div className="flex justify-between text-sm text-muted-foreground">
-              <span>Estimated Length: <strong data-testid="text-estimated-length">{generatedIdea.estimatedLength.toLocaleString()} words</strong></span>
-              <span>Difficulty: <strong data-testid="text-difficulty">{generatedIdea.difficulty}</strong></span>
-            </div>
+                <Separator />
 
-            <div className="flex gap-3">
-              <Button onClick={acceptIdea} className="flex-1" data-testid="button-accept-idea">
-                Accept & Create Outline
-              </Button>
-              <Button onClick={regenerateIdea} variant="outline" data-testid="button-regenerate">
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Regenerate
-              </Button>
-            </div>
+                <div>
+                  <h4 className="font-semibold mb-2 flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Target Audience
+                  </h4>
+                  <p className="text-muted-foreground" data-testid="text-generated-audience">
+                    {selectedIdea.targetAudience}
+                  </p>
+                </div>
+
+                <div>
+                  <h4 className="font-semibold mb-3 flex items-center gap-2">
+                    <Target className="h-4 w-4" />
+                    Key Points
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedIdea.keyPoints?.map((point, index) => (
+                      <Badge key={index} variant="outline" data-testid={`badge-topic-${index}`}>
+                        {point}
+                      </Badge>
+                    )) || <p className="text-muted-foreground text-sm">No key points specified</p>}
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <Button onClick={acceptIdea} className="flex-1" data-testid="button-accept-idea">
+                    Accept & Create Book
+                  </Button>
+                  <Button onClick={regenerateIdeas} variant="outline" disabled={generateIdeasMutation.isPending} data-testid="button-regenerate">
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Generate New Ideas
+                  </Button>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       )}
