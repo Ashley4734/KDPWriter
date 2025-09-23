@@ -11,6 +11,7 @@ import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import NewBook from "@/pages/new-book";
 import Books from "@/pages/books";
+import BookDetail from "@/pages/book-detail";
 import Settings from "@/pages/settings";
 
 function Router() {
@@ -19,6 +20,7 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/new-book" component={NewBook} />
       <Route path="/books" component={Books} />
+      <Route path="/books/:id" component={BookDetail} />
       <Route path="/outlines" component={Books} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />

@@ -125,10 +125,54 @@ export function BookIdeaGenerator({ onIdeaGenerated, onIdeaAccepted }: BookIdeaG
     generateIdeas()
   }
 
+  const createBookMutation = useMutation({
+    mutationFn: async (idea: BookIdea) => {
+      const response = await fetch('/api/books', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          title: idea.title,
+          genre: idea.genre,
+          targetWordCount: 50000, // Default word count
+          status: 'idea',
+          description: idea.description,
+          targetAudience: idea.targetAudience,
+          keyPoints: idea.keyPoints
+        })
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to create book')
+      }
+      
+      return response.json()
+    },
+    onSuccess: (book) => {
+      console.log('Book creation success:', book);
+      toast({
+        title: "Book Created!",
+        description: `"${book?.title || 'Your book'}" has been created. You can now work on the outline.`,
+        variant: "default",
+      });
+      if (onIdeaAccepted && selectedIdea) {
+        onIdeaAccepted({ ...selectedIdea, bookId: book?.id });
+      }
+    },
+    onError: (error) => {
+      toast({
+        title: "Error creating book",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  });
+
   const acceptIdea = () => {
     if (selectedIdea) {
-      console.log("Accepting book idea:", selectedIdea.title)
-      onIdeaAccepted?.(selectedIdea)
+      createBookMutation.mutate(selectedIdea)
     }
   }
   
@@ -341,8 +385,20 @@ export function BookIdeaGenerator({ onIdeaGenerated, onIdeaAccepted }: BookIdeaG
                 </div>
 
                 <div className="flex gap-3">
-                  <Button onClick={acceptIdea} className="flex-1" data-testid="button-accept-idea">
-                    Accept & Create Book
+                  <Button 
+                    onClick={acceptIdea} 
+                    disabled={createBookMutation.isPending} 
+                    className="flex-1" 
+                    data-testid="button-accept-idea"
+                  >
+                    {createBookMutation.isPending ? (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                        Creating Book...
+                      </>
+                    ) : (
+                      'Accept & Create Book'
+                    )}
                   </Button>
                   <Button onClick={regenerateIdeas} variant="outline" disabled={generateIdeasMutation.isPending} data-testid="button-regenerate">
                     <RefreshCw className="mr-2 h-4 w-4" />

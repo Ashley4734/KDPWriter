@@ -4,8 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Search, Filter } from "lucide-react"
-import { Link } from "wouter"
+import { Plus, Search, Filter, Loader2 } from "lucide-react"
+import { Link, useLocation } from "wouter"
+import { useQuery, useMutation } from "@tanstack/react-query"
+import { apiRequest, queryClient } from "@/lib/queryClient"
+import { useToast } from "@/hooks/use-toast"
 import {
   Select,
   SelectContent,
@@ -13,114 +16,114 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import type { Book } from "@shared/schema"
 
-// TODO: Remove mock data when implementing real backend
-const mockBooks = [
-  {
-    id: "1",
-    title: "The Complete Guide to Digital Marketing",
-    description: "A comprehensive guide covering SEO, social media, content marketing, and analytics for modern businesses.",
-    status: "writing" as const,
-    progress: 65,
-    wordCount: 45000,
-    targetWordCount: 70000,
-    genre: "Business",
-    createdAt: "2024-01-15"
-  },
-  {
-    id: "2", 
-    title: "Mastering Remote Work",
-    description: "Strategies and tools for effective remote work, team collaboration, and maintaining work-life balance.",
-    status: "completed" as const,
-    progress: 100,
-    wordCount: 52000,
-    targetWordCount: 50000,
-    genre: "Self-Help",
-    createdAt: "2024-01-10"
-  },
-  {
-    id: "3",
-    title: "Introduction to Cryptocurrency",
-    description: "Beginner's guide to understanding blockchain, Bitcoin, and the future of digital currencies.",
-    status: "outline" as const,
-    progress: 15,
-    wordCount: 0,
-    targetWordCount: 40000,
-    genre: "Finance",
-    createdAt: "2024-01-20"
-  },
-  {
-    id: "4",
-    title: "Healthy Eating on a Budget",
-    description: "Practical tips and recipes for maintaining a nutritious diet without breaking the bank.",
-    status: "completed" as const,
-    progress: 100,
-    wordCount: 38000,
-    targetWordCount: 35000,
-    genre: "Health & Wellness",
-    createdAt: "2024-01-05"
-  },
-  {
-    id: "5",
-    title: "Python for Data Science",
-    description: "Learn Python programming specifically for data analysis, visualization, and machine learning applications.",
-    status: "draft" as const,
-    progress: 80,
-    wordCount: 62000,
-    targetWordCount: 75000,
-    genre: "Technology",
-    createdAt: "2024-01-12"
-  },
-  {
-    id: "6",
-    title: "Starting Your Own Business",
-    description: "A step-by-step guide to launching a successful startup, from idea validation to scaling.",
-    status: "outline" as const,
-    progress: 25,
-    wordCount: 5000,
-    targetWordCount: 55000,
-    genre: "Business",
-    createdAt: "2024-01-18"
-  }
-]
 
 export default function Books() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedGenre, setSelectedGenre] = useState("all")
   const [selectedStatus, setSelectedStatus] = useState("all")
+  const [, setLocation] = useLocation()
+  const { toast } = useToast()
+  
+  // Fetch books from API
+  const { data: books = [], isLoading, error } = useQuery<Book[]>({
+    queryKey: ['/api/books'],
+    queryFn: async () => {
+      const response = await fetch('/api/books')
+      if (!response.ok) {
+        throw new Error('Failed to fetch books')
+      }
+      return response.json()
+    }
+  })
+
+  const deleteBookMutation = useMutation({
+    mutationFn: async (bookId: string) => {
+      return apiRequest('DELETE', `/api/books/${bookId}`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/books'] })
+      toast({
+        title: "Book deleted",
+        description: "The book has been successfully deleted.",
+      })
+    },
+    onError: (error) => {
+      toast({
+        title: "Error deleting book",
+        description: error.message,
+        variant: "destructive",
+      })
+    }
+  })
 
   const handleBookEdit = (id: string) => {
-    console.log("Edit book:", id)
+    setLocation(`/books/${id}/edit`)
   }
 
   const handleBookView = (id: string) => {
-    console.log("View book:", id)
+    setLocation(`/books/${id}`)
   }
 
   const handleBookDownload = (id: string) => {
-    console.log("Download book:", id)
+    toast({
+      title: "Download feature coming soon",
+      description: "Book download functionality will be available in a future update.",
+    })
   }
 
   const handleBookDelete = (id: string) => {
-    console.log("Delete book:", id)
+    if (confirm('Are you sure you want to delete this book? This action cannot be undone.')) {
+      deleteBookMutation.mutate(id)
+    }
   }
 
-  const filteredBooks = mockBooks.filter(book => {
+  const filteredBooks = books.filter(book => {
     const matchesSearch = book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         book.description.toLowerCase().includes(searchQuery.toLowerCase())
+                         (book.description || '').toLowerCase().includes(searchQuery.toLowerCase())
     const matchesGenre = selectedGenre === "all" || book.genre === selectedGenre
     const matchesStatus = selectedStatus === "all" || book.status === selectedStatus
     
     return matchesSearch && matchesGenre && matchesStatus
   })
 
-  const genres = Array.from(new Set(mockBooks.map(book => book.genre)))
+  const genres = Array.from(new Set(books.map(book => book.genre)))
   const statusOptions = [
+    { value: "idea", label: "Idea" },
     { value: "outline", label: "Outline" },
+    { value: "approved", label: "Approved" },
     { value: "writing", label: "Writing" },
-    { value: "draft", label: "Draft" },
     { value: "completed", label: "Completed" }
   ]
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-center min-h-96">
+          <div className="flex items-center gap-3">
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <p className="text-muted-foreground">Loading your books...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto p-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-destructive">Error loading books</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">There was an error loading your books. Please try refreshing the page.</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -185,7 +188,7 @@ export default function Books() {
 
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <span data-testid="text-books-count">
-          Showing {filteredBooks.length} of {mockBooks.length} books
+          Showing {filteredBooks.length} of {books.length} books
         </span>
         {(searchQuery || selectedGenre !== "all" || selectedStatus !== "all") && (
           <Button 
@@ -214,7 +217,15 @@ export default function Books() {
           {filteredBooks.map((book) => (
             <BookCard
               key={book.id}
-              {...book}
+              id={book.id}
+              title={book.title}
+              description={book.description || ''}
+              status={book.status as any}
+              progress={book.progress || 0}
+              wordCount={book.currentWordCount || 0}
+              targetWordCount={book.targetWordCount}
+              genre={book.genre}
+              createdAt={book.createdAt ? new Date(book.createdAt).toISOString().split('T')[0] : ''}
               onEdit={handleBookEdit}
               onView={handleBookView}
               onDownload={handleBookDownload}

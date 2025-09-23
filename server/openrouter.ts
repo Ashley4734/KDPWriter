@@ -74,7 +74,9 @@ export class OpenRouterService {
 
   private async makeRequest(prompt: string, systemPrompt?: string): Promise<string> {
     const apiKey = await this.getApiKey();
+    console.log('Retrieved API key for OpenRouter:', apiKey ? apiKey.substring(0, 10) + '...' : 'null');
     const model = await this.getSelectedModel();
+    console.log('Using model:', model);
 
     const messages = [];
     if (systemPrompt) {
@@ -110,6 +112,34 @@ export class OpenRouterService {
     }
 
     return data.choices[0].message.content;
+  }
+
+  private extractJsonFromResponse(response: string): any {
+    // Try to extract JSON from response that might have code fences or extra text
+    let cleanResponse = response.trim();
+    
+    // Remove markdown code fences
+    cleanResponse = cleanResponse.replace(/^```json\s*\n?/i, '');
+    cleanResponse = cleanResponse.replace(/\n?```\s*$/i, '');
+    cleanResponse = cleanResponse.replace(/^```\s*\n?/i, '');
+    
+    // Try to find JSON array or object in the response
+    const arrayMatch = cleanResponse.match(/\[[\s\S]*\]/);
+    const objectMatch = cleanResponse.match(/\{[\s\S]*\}/);
+    
+    if (arrayMatch) {
+      cleanResponse = arrayMatch[0];
+    } else if (objectMatch) {
+      cleanResponse = objectMatch[0];
+    }
+    
+    try {
+      return JSON.parse(cleanResponse);
+    } catch (error) {
+      console.error("Raw AI response:", response);
+      console.error("Cleaned response:", cleanResponse);
+      throw new Error(`Failed to parse AI response: ${error.message}`);
+    }
   }
 
   async generateBookIdeas(request: GenerateIdeasRequest): Promise<BookIdeaResponse[]> {
@@ -151,13 +181,13 @@ Make sure each idea is unique, valuable, and has clear market potential.`;
     const response = await this.makeRequest(userPrompt, systemPrompt);
     
     try {
-      const ideas = JSON.parse(response);
+      const ideas = this.extractJsonFromResponse(response);
       if (!Array.isArray(ideas)) {
         throw new Error("Response is not an array");
       }
       return ideas;
     } catch (error) {
-      console.error("Failed to parse book ideas response:", response);
+      console.error("Error parsing book ideas:", error.message);
       throw new Error("Failed to parse AI response. Please try again.");
     }
   }
@@ -211,7 +241,7 @@ Make sure the outline is comprehensive, well-structured, and would create a valu
     const response = await this.makeRequest(userPrompt, systemPrompt);
     
     try {
-      const outline = JSON.parse(response);
+      const outline = this.extractJsonFromResponse(response);
       
       // Validate structure
       if (!outline.title || !Array.isArray(outline.chapters)) {

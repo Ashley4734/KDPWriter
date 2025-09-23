@@ -88,11 +88,11 @@ export default function NewBook() {
         description: "Core chapters covering the key topics and concepts.",
         wordCount: Math.round(idea.estimatedLength * 0.8),
         isExpanded: false,
-        subsections: idea.keyTopics.slice(0, 5).map((topic, index) => ({
+        subsections: (idea.keyPoints || []).slice(0, 5).map((topic, index) => ({
           id: `chapter-${index + 1}`,
           title: topic,
           description: `Comprehensive coverage of ${topic} with practical examples and actionable advice.`,
-          wordCount: Math.round((idea.estimatedLength * 0.8) / Math.min(idea.keyTopics.length, 5))
+          wordCount: Math.round(2000) // Default chapter word count
         }))
       },
       {
