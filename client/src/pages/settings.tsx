@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Settings as SettingsIcon, Key, Bell, Download, Loader2, AlertCircle } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
@@ -42,6 +43,12 @@ export default function Settings() {
   const [defaultWordCount, setDefaultWordCount] = useState("50000")
   const [notifications, setNotifications] = useState(true)
   const [autoSave, setAutoSave] = useState(true)
+  // Export settings
+  const [exportFormat, setExportFormat] = useState("docx")
+  const [pageSize, setPageSize] = useState("letter")
+  const [includeTableOfContents, setIncludeTableOfContents] = useState(true)
+  const [includeMetadata, setIncludeMetadata] = useState(true)
+  const [amazonKdpFormatting, setAmazonKdpFormatting] = useState(false)
   
   // Fetch settings from backend
   const { data: settings, isLoading: settingsLoading } = useQuery({
@@ -63,6 +70,12 @@ export default function Settings() {
       setDefaultGenre(settings.defaultGenre || "Business")
       setDefaultWordCount(settings.defaultWordCount?.toString() || "50000")
       setAutoSave(settings.autoSave ?? true)
+      // Export settings
+      setExportFormat(settings.exportFormat || "docx")
+      setPageSize(settings.pageSize || "letter")
+      setIncludeTableOfContents(settings.includeTableOfContents ?? true)
+      setIncludeMetadata(settings.includeMetadata ?? true)
+      setAmazonKdpFormatting(settings.amazonKdpFormatting ?? false)
     }
   }, [settings])
   
@@ -106,7 +119,12 @@ export default function Settings() {
       defaultGenre, 
       defaultWordCount, 
       notifications, 
-      autoSave 
+      autoSave,
+      exportFormat,
+      pageSize,
+      includeTableOfContents,
+      includeMetadata,
+      amazonKdpFormatting
     })
     
     saveSettingsMutation.mutate({
@@ -115,7 +133,13 @@ export default function Settings() {
       selectedModel: selectedModel || null,
       defaultGenre: defaultGenre || 'Business',
       defaultWordCount: parseInt(defaultWordCount) || 50000,
-      autoSave: autoSave
+      autoSave: autoSave,
+      // Export settings
+      exportFormat: exportFormat || 'docx',
+      pageSize: pageSize || 'letter',
+      includeTableOfContents: includeTableOfContents,
+      includeMetadata: includeMetadata,
+      amazonKdpFormatting: amazonKdpFormatting
     })
   }
 
@@ -426,8 +450,12 @@ export default function Settings() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Output Format</Label>
-              <Select defaultValue="docx">
-                <SelectTrigger data-testid="select-output-format">
+              <Select 
+                value={exportFormat} 
+                onValueChange={setExportFormat}
+                data-testid="select-output-format"
+              >
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -440,8 +468,12 @@ export default function Settings() {
             </div>
             <div className="space-y-2">
               <Label>Page Size</Label>
-              <Select defaultValue="letter">
-                <SelectTrigger data-testid="select-page-size">
+              <Select 
+                value={pageSize} 
+                onValueChange={setPageSize}
+                data-testid="select-page-size"
+              >
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -450,6 +482,35 @@ export default function Settings() {
                   <SelectItem value="kindle">Kindle (6" x 9")</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="include-toc" 
+                checked={includeTableOfContents}
+                onCheckedChange={setIncludeTableOfContents}
+                data-testid="checkbox-include-toc"
+              />
+              <Label htmlFor="include-toc">Include Table of Contents</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="include-metadata" 
+                checked={includeMetadata}
+                onCheckedChange={setIncludeMetadata}
+                data-testid="checkbox-include-metadata"
+              />
+              <Label htmlFor="include-metadata">Include Book Metadata</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="amazon-kdp" 
+                checked={amazonKdpFormatting}
+                onCheckedChange={setAmazonKdpFormatting}
+                data-testid="checkbox-amazon-kdp"
+              />
+              <Label htmlFor="amazon-kdp">Use Amazon KDP Formatting</Label>
             </div>
           </div>
         </CardContent>

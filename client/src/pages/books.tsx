@@ -66,11 +66,62 @@ export default function Books() {
     setLocation(`/books/${id}`)
   }
 
-  const handleBookDownload = (id: string) => {
-    toast({
-      title: "Download feature coming soon",
-      description: "Book download functionality will be available in a future update.",
-    })
+  const handleBookDownload = async (id: string) => {
+    try {
+      const book = books?.find(b => b.id === id)
+      if (!book || book.status !== 'completed') {
+        toast({
+          title: "Cannot download book",
+          description: "Book must be completed before it can be downloaded.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      toast({
+        title: "Preparing download...",
+        description: "Your book is being prepared for download.",
+      })
+
+      // Use the quick download endpoint with user's default settings
+      const response = await fetch(`/api/books/${id}/download`, {
+        method: 'GET',
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Download failed' }))
+        throw new Error(errorData.error || 'Failed to download book')
+      }
+
+      // Get the filename from the response headers
+      const contentDisposition = response.headers.get('Content-Disposition')
+      const filename = contentDisposition
+        ? contentDisposition.split('filename="')[1]?.split('"')[0]
+        : `${book.title}.docx`
+
+      // Create blob and download
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+
+      toast({
+        title: "Download complete",
+        description: `${book.title} has been downloaded successfully.`,
+      })
+    } catch (error) {
+      console.error('Error downloading book:', error)
+      toast({
+        title: "Download failed",
+        description: error instanceof Error ? error.message : "Failed to download book",
+        variant: "destructive",
+      })
+    }
   }
 
   const handleBookDelete = (id: string) => {

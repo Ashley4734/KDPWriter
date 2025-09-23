@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { openRouterService } from "./openrouter";
+import { bookExportService } from "./export";
 import { 
   insertSettingsSchema,
   insertBookSchema,
@@ -484,6 +485,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.status(500).json({ 
         error: error instanceof Error ? error.message : "Failed to generate chapter" 
+      });
+    }
+  });
+
+  // Export options validation schema
+  const exportOptionsSchema = z.object({
+    format: z.enum(["docx", "pdf", "txt", "epub"]).optional(),
+    pageSize: z.enum(["letter", "a4", "kindle"]).optional(),
+    includeTableOfContents: z.boolean().optional(),
+    includeMetadata: z.boolean().optional(),
+    amazonKdpFormatting: z.boolean().optional(),
+  });
+
+  // Book export endpoint
+  app.post("/api/books/:bookId/export", async (req, res) => {
+    try {
+      const { bookId } = req.params;
+      
+      // Validate export options
+      const validatedOptions = exportOptionsSchema.parse(req.body);
+      
+      // Get user's export preferences from settings
+      const settings = await storage.getSettings(DEMO_USER_ID);
+      
+      const options = {
+        format: (req.body.format || settings?.exportFormat || "docx") as "docx" | "pdf" | "txt" | "epub",
+        pageSize: (req.body.pageSize || settings?.pageSize || "letter") as "letter" | "a4" | "kindle",
+        includeTableOfContents: req.body.includeTableOfContents ?? settings?.includeTableOfContents ?? true,
+        includeMetadata: req.body.includeMetadata ?? settings?.includeMetadata ?? true,
+        amazonKdpFormatting: req.body.amazonKdpFormatting ?? settings?.amazonKdpFormatting ?? false,
+      };
+
+      console.log(`Exporting book ${bookId} with options:`, options);
+
+      const exportResult = await bookExportService.exportBook(bookId, options);
+
+      // Set response headers for file download
+      res.setHeader('Content-Type', exportResult.mimeType);
+      res.setHeader('Content-Disposition', `attachment; filename="${exportResult.filename}"`);
+      res.setHeader('Content-Length', exportResult.buffer.length);
+      
+      res.send(exportResult.buffer);
+    } catch (error) {
+      console.error("Error exporting book:", error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Failed to export book" 
+      });
+    }
+  });
+
+  // Quick export endpoint using user's default settings
+  app.get("/api/books/:bookId/download", async (req, res) => {
+    try {
+      const { bookId } = req.params;
+      
+      // Get user's export preferences
+      const settings = await storage.getSettings(DEMO_USER_ID);
+      
+      const options = {
+        format: (settings?.exportFormat || "docx") as "docx" | "pdf" | "txt" | "epub",
+        pageSize: (settings?.pageSize || "letter") as "letter" | "a4" | "kindle",
+        includeTableOfContents: settings?.includeTableOfContents ?? true,
+        includeMetadata: settings?.includeMetadata ?? true,
+        amazonKdpFormatting: settings?.amazonKdpFormatting ?? false,
+      };
+
+      console.log(`Quick downloading book ${bookId} with default settings`);
+
+      const exportResult = await bookExportService.exportBook(bookId, options);
+
+      res.setHeader('Content-Type', exportResult.mimeType);
+      res.setHeader('Content-Disposition', `attachment; filename="${exportResult.filename}"`);
+      res.setHeader('Content-Length', exportResult.buffer.length);
+      
+      res.send(exportResult.buffer);
+    } catch (error) {
+      console.error("Error downloading book:", error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Failed to download book" 
       });
     }
   });

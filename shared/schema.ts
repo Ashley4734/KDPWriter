@@ -17,6 +17,12 @@ export const settings = pgTable("settings", {
   defaultGenre: text("default_genre"),
   defaultWordCount: integer("default_word_count").default(50000),
   autoSave: boolean("auto_save").default(true),
+  // Export settings
+  exportFormat: text("export_format").default("docx"), // docx, pdf, txt, epub
+  pageSize: text("page_size").default("letter"), // letter, a4, kindle
+  includeTableOfContents: boolean("include_toc").default(true),
+  includeMetadata: boolean("include_metadata").default(true),
+  amazonKdpFormatting: boolean("amazon_kdp_formatting").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
