@@ -74,7 +74,6 @@ export class OpenRouterService {
 
   private async makeRequest(prompt: string, systemPrompt?: string): Promise<string> {
     const apiKey = await this.getApiKey();
-    console.log('Retrieved API key for OpenRouter:', apiKey ? apiKey.substring(0, 10) + '...' : 'null');
     const model = await this.getSelectedModel();
     console.log('Using model:', model);
 

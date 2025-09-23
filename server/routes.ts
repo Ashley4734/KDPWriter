@@ -432,6 +432,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!outline) {
         return res.status(404).json({ error: "Book outline not found" });
       }
+      if (!outline.isApproved) {
+        return res.status(409).json({ error: "Outline must be approved before writing can begin" });
+      }
       
       // Generate the chapter content
       const chapterContent = await openRouterService.generateChapter({

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { OutlineEditor, OutlineSection } from "@/components/outline-editor"
+import { ChapterWriter } from "@/components/chapter-writer"
 import { ProgressIndicator } from "@/components/progress-indicator"
 import { ArrowLeft, Edit, Download, Trash2, CheckCircle, Clock, FileText, Loader2 } from "lucide-react"
 import { Link, useParams, useLocation } from "wouter"
@@ -413,6 +414,23 @@ export default function BookDetail() {
           </Card>
         </div>
       </div>
+
+      {/* Chapter Writer - Only show when outline is approved */}
+      {outline?.isApproved && (
+        <div className="mt-8">
+          <ChapterWriter
+            bookId={book.id}
+            bookTitle={book.title}
+            bookDescription={book.description || ""}
+            bookGenre={book.genre}
+            targetAudience={book.targetAudience || ""}
+            outline={{
+              id: outline.id,
+              chapters: outline.chapters
+            }}
+          />
+        </div>
+      )}
     </div>
   )
 }
