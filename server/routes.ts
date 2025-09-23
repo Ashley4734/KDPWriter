@@ -229,12 +229,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/books/:bookId/chapters", async (req, res) => {
     try {
+      // Verify outline is approved before allowing chapter creation
+      const outline = await storage.getOutlineByBookId(req.params.bookId);
+      if (!outline) {
+        return res.status(400).json({ error: "No outline found for this book" });
+      }
+      if (!outline.isApproved) {
+        return res.status(409).json({ error: "Outline must be approved before writing can begin" });
+      }
+      
       const validatedData = insertChapterSchema.parse({
         ...req.body,
         bookId: req.params.bookId
       });
       
       const chapter = await storage.createChapter(validatedData);
+      
+      // Update book status to writing if first chapter
+      await storage.updateBook(req.params.bookId, { status: "writing" });
+      
       res.status(201).json(chapter);
     } catch (error) {
       console.error("Error creating chapter:", error);
@@ -244,6 +257,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/chapters/:id", async (req, res) => {
     try {
+      // Get existing chapter to check book outline approval
+      const existingChapter = await storage.getChapter(req.params.id);
+      if (!existingChapter) {
+        return res.status(404).json({ error: "Chapter not found" });
+      }
+      
+      // Verify outline is approved before allowing chapter updates
+      const outline = await storage.getOutlineByBookId(existingChapter.bookId);
+      if (!outline || !outline.isApproved) {
+        return res.status(409).json({ error: "Outline must be approved before writing can begin" });
+      }
+      
       const chapter = await storage.updateChapter(req.params.id, req.body);
       
       if (!chapter) {
