@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://bookgen:bookgen_password@postgres:5432/bookgen
+      - SESSION_SECRET=${SESSION_SECRET:-your-session-secret-here}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    depends_on:
+      - postgres
+    volumes:
+      - app_data:/app/data
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=bookgen
+      - POSTGRES_USER=bookgen
+      - POSTGRES_PASSWORD=bookgen_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  postgres_data:
+  app_data:
