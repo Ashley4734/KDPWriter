@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
-import { Settings as SettingsIcon, Key, Bell, Download } from "lucide-react"
+import { Settings as SettingsIcon, Key, Bell, Download, Loader2, AlertCircle } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   Select,
   SelectContent,
@@ -15,9 +16,23 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
+interface OpenRouterModel {
+  id: string
+  name: string
+  description?: string
+  context_length: number
+  pricing: {
+    prompt: string
+    completion: string
+  }
+}
+
 export default function Settings() {
   const [apiKey, setApiKey] = useState("")
   const [selectedModel, setSelectedModel] = useState("anthropic/claude-3.5-sonnet")
+  const [availableModels, setAvailableModels] = useState<OpenRouterModel[]>([])
+  const [modelsLoading, setModelsLoading] = useState(false)
+  const [modelsError, setModelsError] = useState<string | null>(null)
   const [defaultGenre, setDefaultGenre] = useState("Business")
   const [defaultWordCount, setDefaultWordCount] = useState("50000")
   const [notifications, setNotifications] = useState(true)
@@ -34,47 +49,70 @@ export default function Settings() {
     })
   }
 
-  const handleTestConnection = () => {
-    console.log("Testing OpenRouter connection")
+  const fetchOpenRouterModels = async () => {
+    setModelsLoading(true)
+    setModelsError(null)
+    
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/models', {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch models: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      
+      // Filter for text models only (exclude image, audio, etc.)
+      const textModels = data.data.filter((model: any) => {
+        const modelType = model.id.toLowerCase()
+        return !modelType.includes('vision') && 
+               !modelType.includes('image') && 
+               !modelType.includes('audio') &&
+               !modelType.includes('whisper') &&
+               !modelType.includes('dall-e') &&
+               !modelType.includes('tts') &&
+               !modelType.includes('embedding')
+      })
+      
+      const formattedModels: OpenRouterModel[] = textModels.map((model: any) => ({
+        id: model.id,
+        name: model.name || model.id,
+        description: model.description,
+        context_length: model.context_length,
+        pricing: model.pricing
+      }))
+      
+      // Sort by name for better UX
+      formattedModels.sort((a, b) => a.name.localeCompare(b.name))
+      
+      setAvailableModels(formattedModels)
+    } catch (error) {
+      setModelsError(error instanceof Error ? error.message : 'Failed to fetch models')
+      console.error('Error fetching OpenRouter models:', error)
+    } finally {
+      setModelsLoading(false)
+    }
   }
 
-  const openRouterModels = [
-    {
-      id: "anthropic/claude-3.5-sonnet",
-      name: "Claude 3.5 Sonnet",
-      description: "Most capable model for complex writing tasks"
-    },
-    {
-      id: "anthropic/claude-3-haiku",
-      name: "Claude 3 Haiku", 
-      description: "Fast and efficient for simpler tasks"
-    },
-    {
-      id: "openai/gpt-4o",
-      name: "GPT-4o",
-      description: "OpenAI's most advanced multimodal model"
-    },
-    {
-      id: "openai/gpt-4o-mini",
-      name: "GPT-4o Mini",
-      description: "Affordable and intelligent small model"
-    },
-    {
-      id: "meta-llama/llama-3.1-70b-instruct",
-      name: "Llama 3.1 70B",
-      description: "Meta's powerful open-source model"
-    },
-    {
-      id: "google/gemini-pro-1.5",
-      name: "Gemini 1.5 Pro",
-      description: "Google's advanced model with large context"
-    },
-    {
-      id: "mistralai/mixtral-8x7b-instruct",
-      name: "Mixtral 8x7B",
-      description: "High-quality mixture of experts model"
+  const handleTestConnection = async () => {
+    console.log("Testing OpenRouter connection")
+    if (apiKey) {
+      await fetchOpenRouterModels()
+    } else {
+      setModelsError("API key is required to fetch models")
     }
-  ]
+  }
+
+  useEffect(() => {
+    if (apiKey) {
+      fetchOpenRouterModels()
+    }
+  }, [apiKey])
 
   const genres = [
     "Business", "Self-Help", "Health & Wellness", "Technology", 
@@ -131,36 +169,92 @@ export default function Settings() {
           <CardTitle>AI Model Selection</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {!apiKey && (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Please enter your OpenRouter API key above to load available models.
+              </AlertDescription>
+            </Alert>
+          )}
+          
+          {modelsError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                {modelsError}
+              </AlertDescription>
+            </Alert>
+          )}
+          
           <div className="space-y-2">
             <Label htmlFor="model-select">Choose AI Model</Label>
-            <Select value={selectedModel} onValueChange={setSelectedModel}>
+            <Select value={selectedModel} onValueChange={setSelectedModel} disabled={modelsLoading || !apiKey}>
               <SelectTrigger data-testid="select-ai-model">
-                <SelectValue placeholder="Select an AI model" />
+                <SelectValue placeholder={
+                  modelsLoading ? "Loading models..." : 
+                  !apiKey ? "Enter API key to load models" :
+                  availableModels.length === 0 ? "No models available" :
+                  "Select an AI model"
+                } />
               </SelectTrigger>
               <SelectContent>
-                {openRouterModels.map((model) => (
+                {availableModels.map((model) => (
                   <SelectItem key={model.id} value={model.id}>
                     <div className="flex flex-col">
                       <span className="font-medium">{model.name}</span>
-                      <span className="text-sm text-muted-foreground">{model.description}</span>
+                      {model.description && (
+                        <span className="text-sm text-muted-foreground">{model.description}</span>
+                      )}
+                      <div className="flex gap-2 text-xs text-muted-foreground mt-1">
+                        <span>Context: {model.context_length?.toLocaleString()}</span>
+                        {model.pricing && (
+                          <span>Cost: ${model.pricing.prompt}/${model.pricing.completion}</span>
+                        )}
+                      </div>
                     </div>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {modelsLoading && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading available models...
+              </div>
+            )}
             <p className="text-sm text-muted-foreground">
-              Different models have varying capabilities and costs. Choose based on your quality and budget requirements.
+              {availableModels.length > 0 
+                ? `${availableModels.length} text models available. Different models have varying capabilities and costs.`
+                : "Models will load automatically when you enter a valid API key."
+              }
             </p>
           </div>
-          {selectedModel && (
+          
+          {selectedModel && availableModels.length > 0 && (
             <div className="p-3 bg-muted rounded-md">
               <p className="text-sm font-medium mb-1">Selected Model:</p>
-              <p className="text-sm">
-                {openRouterModels.find(model => model.id === selectedModel)?.name}
+              <p className="text-sm font-medium">
+                {availableModels.find(model => model.id === selectedModel)?.name}
               </p>
-              <p className="text-xs text-muted-foreground">
-                {openRouterModels.find(model => model.id === selectedModel)?.description}
-              </p>
+              {availableModels.find(model => model.id === selectedModel)?.description && (
+                <p className="text-xs text-muted-foreground mb-2">
+                  {availableModels.find(model => model.id === selectedModel)?.description}
+                </p>
+              )}
+              <div className="flex gap-4 text-xs">
+                <span>
+                  <strong>Context Length:</strong>{" "}
+                  {availableModels.find(model => model.id === selectedModel)?.context_length?.toLocaleString()}
+                </span>
+                {availableModels.find(model => model.id === selectedModel)?.pricing && (
+                  <span>
+                    <strong>Pricing:</strong>{" "}
+                    ${availableModels.find(model => model.id === selectedModel)?.pricing.prompt}/1K prompt,{" "}
+                    ${availableModels.find(model => model.id === selectedModel)?.pricing.completion}/1K completion
+                  </span>
+                )}
+              </div>
             </div>
           )}
         </CardContent>
