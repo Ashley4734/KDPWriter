@@ -15,6 +15,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { useToast } from "@/hooks/use-toast"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 
 interface OpenRouterModel {
   id: string
@@ -28,15 +30,74 @@ interface OpenRouterModel {
 }
 
 export default function Settings() {
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+  
   const [apiKey, setApiKey] = useState("")
-  const [selectedModel, setSelectedModel] = useState("anthropic/claude-3.5-sonnet")
+  const [selectedModel, setSelectedModel] = useState("")
   const [availableModels, setAvailableModels] = useState<OpenRouterModel[]>([])
   const [modelsLoading, setModelsLoading] = useState(false)
   const [modelsError, setModelsError] = useState<string | null>(null)
-  const [defaultGenre, setDefaultGenre] = useState("Business")
+  const [defaultGenre, setDefaultGenre] = useState("")
   const [defaultWordCount, setDefaultWordCount] = useState("50000")
   const [notifications, setNotifications] = useState(true)
   const [autoSave, setAutoSave] = useState(true)
+  
+  // Fetch settings from backend
+  const { data: settings, isLoading: settingsLoading } = useQuery({
+    queryKey: ['/api/settings'],
+    queryFn: async () => {
+      const response = await fetch('/api/settings')
+      if (!response.ok) {
+        throw new Error('Failed to fetch settings')
+      }
+      return response.json()
+    }
+  })
+  
+  // Update local state when settings are loaded
+  useEffect(() => {
+    if (settings) {
+      setApiKey(settings.openrouterApiKey || "")
+      setSelectedModel(settings.selectedModel || "")
+      setDefaultGenre(settings.defaultGenre || "Business")
+      setDefaultWordCount(settings.defaultWordCount?.toString() || "50000")
+      setAutoSave(settings.autoSave ?? true)
+    }
+  }, [settings])
+  
+  // Save settings mutation
+  const saveSettingsMutation = useMutation({
+    mutationFn: async (settingsData: any) => {
+      const response = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(settingsData)
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to save settings')
+      }
+      
+      return response.json()
+    },
+    onSuccess: () => {
+      toast({
+        title: "Settings saved",
+        description: "Your settings have been saved successfully."
+      })
+      queryClient.invalidateQueries({ queryKey: ['/api/settings'] })
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error saving settings",
+        description: error.message,
+        variant: "destructive"
+      })
+    }
+  })
 
   const handleSaveSettings = () => {
     console.log("Saving settings:", { 
@@ -46,6 +107,15 @@ export default function Settings() {
       defaultWordCount, 
       notifications, 
       autoSave 
+    })
+    
+    saveSettingsMutation.mutate({
+      userId: 'demo-user',
+      openrouterApiKey: apiKey || null,
+      selectedModel: selectedModel || null,
+      defaultGenre: defaultGenre || 'Business',
+      defaultWordCount: parseInt(defaultWordCount) || 50000,
+      autoSave: autoSave
     })
   }
 
@@ -386,7 +456,12 @@ export default function Settings() {
       </Card>
 
       <div className="flex justify-end">
-        <Button onClick={handleSaveSettings} data-testid="button-save-settings">
+        <Button 
+          onClick={handleSaveSettings} 
+          disabled={saveSettingsMutation.isPending || settingsLoading}
+          data-testid="button-save-settings"
+        >
+          {saveSettingsMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Save Settings
         </Button>
       </div>
