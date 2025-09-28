@@ -64,18 +64,28 @@ export class OpenRouterService {
       (error as any).statusCode = 400;
       throw error;
     }
-    return settings.openrouterApiKey;
+    
+    const apiKey = settings.openrouterApiKey;
+    
+    // Validate API key format
+    if (!apiKey.startsWith('sk-or-')) {
+      console.warn('API key does not start with sk-or-, this may cause authentication issues');
+    }
+    
+    return apiKey;
   }
 
   private async getSelectedModel(): Promise<string> {
     const settings = await storage.getSettings("demo-user");
-    return settings?.selectedModel || "anthropic/claude-3.5-sonnet";
+    // Use a more widely available model as default
+    return settings?.selectedModel || "openai/gpt-4o-mini";
   }
 
   private async makeRequest(prompt: string, systemPrompt?: string): Promise<string> {
     const apiKey = await this.getApiKey();
     const model = await this.getSelectedModel();
     console.log('Using model:', model);
+    console.log('API key format:', apiKey.substring(0, 10) + '...' + apiKey.substring(apiKey.length - 4));
 
     const messages = [];
     if (systemPrompt) {
@@ -83,14 +93,18 @@ export class OpenRouterService {
     }
     messages.push({ role: "user", content: prompt });
 
+    const headers = {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": process.env.REPL_ID ? `https://${process.env.REPL_ID}.replit.app` : "http://localhost:5000",
+      "X-Title": "BookGen AI - Nonfiction Book Generator"
+    };
+    
+    console.log('Request headers (auth hidden):', { ...headers, Authorization: 'Bearer [HIDDEN]' });
+    
     const response = await fetch(this.baseUrl, {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": process.env.REPL_ID ? `https://${process.env.REPL_ID}.replit.app` : "http://localhost:5000",
-        "X-Title": "BookGen AI - Nonfiction Book Generator"
-      },
+      headers,
       body: JSON.stringify({
         model,
         messages,
@@ -101,6 +115,25 @@ export class OpenRouterService {
 
     if (!response.ok) {
       const error = await response.text();
+      console.error('OpenRouter API Error:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: error,
+        url: this.baseUrl,
+        model: model
+      });
+      
+      if (response.status === 401) {
+        // Try with a different commonly available model if current one fails
+        if (model !== "openai/gpt-4o-mini") {
+          console.log(`Model ${model} failed with 401, retrying with fallback model`);
+          const fallbackSettings = { selectedModel: "openai/gpt-4o-mini" };
+          await storage.updateSettings("demo-user", fallbackSettings);
+          return this.makeRequest(prompt, systemPrompt);
+        }
+        throw new Error(`OpenRouter authentication failed. Please verify your API key is correct and has access to AI models. Try a different model in Settings.`);
+      }
+      
       throw new Error(`OpenRouter API error (${response.status}): ${error}`);
     }
 

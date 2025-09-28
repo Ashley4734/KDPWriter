@@ -5,7 +5,10 @@ import { ProgressIndicator } from "@/components/progress-indicator"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ArrowLeft, CheckCircle } from "lucide-react"
-import { Link } from "wouter"
+import { Link, useLocation } from "wouter"
+import { useMutation } from "@tanstack/react-query"
+import { apiRequest } from "@/lib/queryClient"
+import { useToast } from "@/hooks/use-toast"
 import type { OutlineSection } from "@/components/outline-editor"
 
 type BookCreationStep = "idea" | "outline" | "review" | "write" | "export"
@@ -27,6 +30,48 @@ export default function NewBook() {
   const [bookIdea, setBookIdea] = useState<BookIdea | null>(null)
   const [outline, setOutline] = useState<OutlineSection[]>([])
   const [isOutlineApproved, setIsOutlineApproved] = useState(false)
+  const [, navigate] = useLocation()
+  const { toast } = useToast()
+
+  // Mutation to create book
+  const createBookMutation = useMutation({
+    mutationFn: async (bookData: any) => {
+      return apiRequest('POST', '/api/books', bookData)
+    },
+    onSuccess: (createdBook) => {
+      // Navigate to the book detail page for chapter writing
+      navigate(`/books/${createdBook.id}`)
+      toast({
+        title: "Book created!",
+        description: "Your book has been created. You can now start writing chapters.",
+      })
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error creating book",
+        description: error.message,
+        variant: "destructive",
+      })
+      setCurrentStep("review") // Go back to review step
+    }
+  })
+
+  // Function to create book and redirect
+  const createBookAndRedirect = () => {
+    if (!bookIdea) return
+    
+    const bookData = {
+      title: bookIdea.title,
+      description: bookIdea.description,
+      genre: bookIdea.genre,
+      targetAudience: bookIdea.targetAudience,
+      estimatedLength: bookIdea.estimatedLength,
+      difficulty: bookIdea.difficulty,
+      status: "outline" as const
+    }
+    
+    createBookMutation.mutate(bookData)
+  }
 
   const steps = [
     {
@@ -66,8 +111,10 @@ export default function NewBook() {
     return Math.round((completedSteps / steps.length) * 100)
   }
 
-  const handleIdeaGenerated = (idea: BookIdea) => {
-    setBookIdea(idea)
+  const handleIdeaGenerated = (ideas: any[]) => {
+    if (ideas && ideas.length > 0) {
+      setBookIdea(ideas[0])
+    }
   }
 
   const handleIdeaAccepted = (idea: BookIdea) => {
@@ -88,7 +135,7 @@ export default function NewBook() {
         description: "Core chapters covering the key topics and concepts.",
         wordCount: Math.round(idea.estimatedLength * 0.8),
         isExpanded: false,
-        subsections: (idea.keyPoints || []).slice(0, 5).map((topic, index) => ({
+        subsections: (idea.keyTopics || []).slice(0, 5).map((topic: string, index: number) => ({
           id: `chapter-${index + 1}`,
           title: topic,
           description: `Comprehensive coverage of ${topic} with practical examples and actionable advice.`,
@@ -121,7 +168,7 @@ export default function NewBook() {
       case "idea":
         return (
           <BookIdeaGenerator
-            onIdeaGenerated={handleIdeaGenerated}
+            onIdeaGenerated={(ideas) => setBookIdea(ideas[0] || null)}
             onIdeaAccepted={handleIdeaAccepted}
           />
         )
@@ -185,18 +232,22 @@ export default function NewBook() {
         )
       
       case "write":
+        // Actually create book and redirect to book detail page for chapter writing
+        if (bookIdea && outline.length > 0) {
+          createBookAndRedirect()
+        }
         return (
           <Card>
             <CardHeader>
-              <CardTitle>Writing Your Book</CardTitle>
+              <CardTitle>Creating Your Book</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground mb-4">
-                The AI is now writing your book based on the approved outline. This process typically takes 10-15 minutes.
+                Creating your book record and setting up for chapter writing...
               </p>
               <div className="text-center py-8">
                 <div className="animate-pulse text-primary">
-                  Writing in progress...
+                  Setting up book structure...
                 </div>
               </div>
             </CardContent>
