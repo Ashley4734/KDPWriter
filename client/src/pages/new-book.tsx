@@ -36,9 +36,9 @@ export default function NewBook() {
   // Mutation to create book
   const createBookMutation = useMutation({
     mutationFn: async (bookData: any) => {
-      return apiRequest('POST', '/api/books', bookData)
+      return apiRequest('POST', '/api/books', bookData) as any
     },
-    onSuccess: (createdBook) => {
+    onSuccess: (createdBook: any) => {
       // Navigate to the book detail page for chapter writing
       navigate(`/books/${createdBook.id}`)
       toast({
@@ -117,40 +117,87 @@ export default function NewBook() {
     }
   }
 
+  // Mutation to generate AI outline
+  const generateOutlineMutation = useMutation({
+    mutationFn: async (bookData: any) => {
+      const bookResponse = await apiRequest('POST', '/api/books', bookData) as any
+      // Generate AI outline
+      const outlineRequest = {
+        bookId: bookResponse.id,
+        title: bookData.title,
+        description: bookData.description,
+        targetWordCount: bookData.estimatedLength,
+        genre: bookData.genre,
+        targetAudience: bookData.targetAudience
+      }
+      return apiRequest('POST', '/api/generate-outline', outlineRequest) as any
+    },
+    onSuccess: (aiOutline: any) => {
+      // Convert AI outline to OutlineSection format
+      const outlineSections: OutlineSection[] = aiOutline.chapters.map((chapter: any, index: number) => ({
+        id: chapter.id || `chapter-${index + 1}`,
+        title: chapter.title,
+        description: chapter.description,
+        wordCount: chapter.estimatedWordCount || 2000,
+        isExpanded: index === 0,
+        keyPoints: chapter.keyPoints
+      }))
+      setOutline(outlineSections)
+      setCurrentStep("outline")
+      toast({
+        title: "Outline generated!",
+        description: "AI has created a detailed outline for your book.",
+      })
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error generating outline",
+        description: error.message,
+        variant: "destructive",
+      })
+      // Fall back to simple template on error
+      const fallbackOutline: OutlineSection[] = [
+        {
+          id: "intro",
+          title: "Introduction", 
+          description: `Introduction to ${bookIdea?.title} - setting the stage and explaining why this topic matters.`,
+          wordCount: Math.round((bookIdea?.estimatedLength || 50000) * 0.1),
+          isExpanded: true
+        },
+        {
+          id: "main",
+          title: "Main Content",
+          description: "Core chapters covering the key topics and concepts.",
+          wordCount: Math.round((bookIdea?.estimatedLength || 50000) * 0.8),
+          isExpanded: false
+        },
+        {
+          id: "conclusion",
+          title: "Conclusion",
+          description: "Summary of key points and next steps for readers.",
+          wordCount: Math.round((bookIdea?.estimatedLength || 50000) * 0.1),
+          isExpanded: false
+        }
+      ]
+      setOutline(fallbackOutline)
+      setCurrentStep("outline")
+    }
+  })
+
   const handleIdeaAccepted = (idea: BookIdea) => {
     setBookIdea(idea)
-    setCurrentStep("outline")
-    // Generate initial outline based on idea
-    const initialOutline: OutlineSection[] = [
-      {
-        id: "intro",
-        title: "Introduction", 
-        description: `Introduction to ${idea.title} - setting the stage and explaining why this topic matters.`,
-        wordCount: Math.round(idea.estimatedLength * 0.1),
-        isExpanded: true
-      },
-      {
-        id: "main",
-        title: "Main Content",
-        description: "Core chapters covering the key topics and concepts.",
-        wordCount: Math.round(idea.estimatedLength * 0.8),
-        isExpanded: false,
-        subsections: (idea.keyTopics || []).slice(0, 5).map((topic: string, index: number) => ({
-          id: `chapter-${index + 1}`,
-          title: topic,
-          description: `Comprehensive coverage of ${topic} with practical examples and actionable advice.`,
-          wordCount: Math.round(2000) // Default chapter word count
-        }))
-      },
-      {
-        id: "conclusion",
-        title: "Conclusion",
-        description: "Summary of key points and next steps for readers.",
-        wordCount: Math.round(idea.estimatedLength * 0.1),
-        isExpanded: false
-      }
-    ]
-    setOutline(initialOutline)
+    // Create book and generate AI outline
+    const bookData = {
+      title: idea.title,
+      description: idea.description,
+      genre: idea.genre,
+      targetAudience: idea.targetAudience,
+      estimatedLength: idea.estimatedLength,
+      difficulty: idea.difficulty,
+      status: "outline" as const
+    }
+    
+    generateOutlineMutation.mutate(bookData)
   }
 
   const handleOutlineChange = (newOutline: OutlineSection[]) => {
@@ -168,12 +215,32 @@ export default function NewBook() {
       case "idea":
         return (
           <BookIdeaGenerator
-            onIdeaGenerated={(ideas) => setBookIdea(ideas[0] || null)}
-            onIdeaAccepted={handleIdeaAccepted}
+            onIdeaGenerated={(ideas) => setBookIdea(ideas[0] as BookIdea || null)}
+            onIdeaAccepted={(idea: any) => handleIdeaAccepted(idea)}
           />
         )
       
       case "outline":
+        if (generateOutlineMutation.isPending) {
+          return (
+            <Card>
+              <CardHeader>
+                <CardTitle>Generating Outline</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground mb-4">
+                  AI is creating a detailed outline for your book...
+                </p>
+                <div className="text-center py-8">
+                  <div className="animate-pulse text-primary">
+                    Generating chapter structure and content plan...
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )
+        }
+        
         return (
           <div className="space-y-6">
             <Card>
@@ -182,7 +249,7 @@ export default function NewBook() {
               </CardHeader>
               <CardContent>
                 <p className="text-muted-foreground mb-4">
-                  Review and edit the generated outline. You can add, remove, or modify sections as needed.
+                  Review and edit the AI-generated outline. You can add, remove, or modify sections as needed.
                 </p>
               </CardContent>
             </Card>
