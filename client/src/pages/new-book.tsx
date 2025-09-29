@@ -65,8 +65,7 @@ export default function NewBook() {
       description: bookIdea.description,
       genre: bookIdea.genre,
       targetAudience: bookIdea.targetAudience,
-      estimatedLength: bookIdea.estimatedLength,
-      difficulty: bookIdea.difficulty,
+      targetWordCount: 50000, // Default word count (BookIdea doesn't include length)
       status: "outline" as const
     }
     
@@ -192,8 +191,7 @@ export default function NewBook() {
       description: idea.description,
       genre: idea.genre,
       targetAudience: idea.targetAudience,
-      estimatedLength: idea.estimatedLength,
-      difficulty: idea.difficulty,
+      targetWordCount: 50000, // Default word count (BookIdea doesn't include length)
       status: "outline" as const
     }
     
