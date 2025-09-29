@@ -25,7 +25,8 @@ export default function NewBook() {
   // Mutation to create book
   const createBookMutation = useMutation({
     mutationFn: async (bookData: any) => {
-      return apiRequest('POST', '/api/books', bookData) as any
+      const response = await apiRequest('POST', '/api/books', bookData)
+      return response.json() // Parse JSON from Response object
     },
     onSuccess: (createdBook: any) => {
       // Navigate to the book detail page for chapter writing
@@ -108,17 +109,25 @@ export default function NewBook() {
   // Mutation to generate AI outline
   const generateOutlineMutation = useMutation({
     mutationFn: async (bookData: any) => {
-      const bookResponse = await apiRequest('POST', '/api/books', bookData) as any
+      const bookResponse = await apiRequest('POST', '/api/books', bookData)
+      const book = await bookResponse.json() // Parse JSON from Response object
+      
+      // Check if book creation was successful
+      if (!book?.id) {
+        throw new Error('Failed to create book - no ID returned')
+      }
+      
       // Generate AI outline
       const outlineRequest = {
-        bookId: bookResponse.id,
+        bookId: book.id,
         title: bookData.title,
         description: bookData.description,
-        targetWordCount: bookData.targetWordCount, // Fixed: estimatedLength -> targetWordCount
+        targetWordCount: bookData.targetWordCount,
         genre: bookData.genre,
         targetAudience: bookData.targetAudience
       }
-      return apiRequest('POST', '/api/generate-outline', outlineRequest) as any
+      const outlineResponse = await apiRequest('POST', '/api/generate-outline', outlineRequest)
+      return outlineResponse.json() // Parse JSON from Response object
     },
     onSuccess: (aiOutline: any) => {
       // Convert AI outline to OutlineSection format
