@@ -10,20 +10,9 @@ import { useMutation } from "@tanstack/react-query"
 import { apiRequest } from "@/lib/queryClient"
 import { useToast } from "@/hooks/use-toast"
 import type { OutlineSection } from "@/components/outline-editor"
+import type { BookIdea } from "@shared/schema"
 
 type BookCreationStep = "idea" | "outline" | "review" | "write" | "export"
-
-interface BookIdea {
-  title: string
-  subtitle: string
-  description: string
-  targetAudience: string
-  marketPotential: string
-  keyTopics: string[]
-  estimatedLength: number
-  difficulty: "Beginner" | "Intermediate" | "Advanced"
-  genre: string
-}
 
 export default function NewBook() {
   const [currentStep, setCurrentStep] = useState<BookCreationStep>("idea")
@@ -125,7 +114,7 @@ export default function NewBook() {
         bookId: bookResponse.id,
         title: bookData.title,
         description: bookData.description,
-        targetWordCount: bookData.estimatedLength,
+        targetWordCount: bookData.targetWordCount, // Fixed: estimatedLength -> targetWordCount
         genre: bookData.genre,
         targetAudience: bookData.targetAudience
       }
@@ -160,21 +149,21 @@ export default function NewBook() {
           id: "intro",
           title: "Introduction", 
           description: `Introduction to ${bookIdea?.title} - setting the stage and explaining why this topic matters.`,
-          wordCount: Math.round((bookIdea?.estimatedLength || 50000) * 0.1),
+          wordCount: Math.round(50000 * 0.1),
           isExpanded: true
         },
         {
           id: "main",
           title: "Main Content",
           description: "Core chapters covering the key topics and concepts.",
-          wordCount: Math.round((bookIdea?.estimatedLength || 50000) * 0.8),
+          wordCount: Math.round(50000 * 0.8),
           isExpanded: false
         },
         {
           id: "conclusion",
           title: "Conclusion",
           description: "Summary of key points and next steps for readers.",
-          wordCount: Math.round((bookIdea?.estimatedLength || 50000) * 0.1),
+          wordCount: Math.round(50000 * 0.1),
           isExpanded: false
         }
       ]
@@ -213,8 +202,8 @@ export default function NewBook() {
       case "idea":
         return (
           <BookIdeaGenerator
-            onIdeaGenerated={(ideas) => setBookIdea(ideas[0] as BookIdea || null)}
-            onIdeaAccepted={(idea: any) => handleIdeaAccepted(idea)}
+            onIdeaGenerated={(ideas) => setBookIdea(ideas[0] || null)}
+            onIdeaAccepted={(idea: BookIdea) => handleIdeaAccepted(idea)}
           />
         )
       
